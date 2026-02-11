@@ -3,4 +3,4 @@ pandas
 numpy
 fastapi
 sqlalchemy
-
+pytest
