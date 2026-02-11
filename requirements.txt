@@ -4,3 +4,4 @@ numpy
 fastapi
 sqlalchemy
 pytest
+psycopg
