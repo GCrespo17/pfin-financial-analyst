@@ -14,8 +14,10 @@ CREATE TABLE COMPANIES(
   symbol VARCHAR(10) UNIQUE NOT NULL,
   name VARCHAR(100) UNIQUE NOT NULL,
   id_location INTEGER NOT NULL,
-  industry VARCHAR(150),
-  sector VARCHAR(150),
+  id_industry INTEGER,
+  id_sector INTEGER,
+  CONSTRAINT fk_id_industry FOREIGN KEY(id_industry) REFERENCES INDUSTRIES(id_industry),
+  CONSTRAINT fk_id_sector FOREIGN KEY(id_sector) REFERENCES SECTORS(id_sector),
   CONSTRAINT fk_id_location FOREIGN KEY(id_location) REFERENCES LOCATIONS(id_location)
 );
 
