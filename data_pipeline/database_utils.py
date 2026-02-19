@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, engine, text, MetaData, Table, insert
 import os
 from dotenv import load_dotenv
 
@@ -10,6 +10,13 @@ class DatabaseUtilites:
         self.db_username = os.getenv('DB_USERNAME')
         self.db_password = os.getenv('DB_PASSWORD')
         self.engine = create_engine('postgresql+psycopg://db_username:db_password@localhost/db_name')
+        self.metadata = MetaData()
+        self.metadata.reflect(bind=self.engine)
+        self.sector_table = self.metadata.tables["SECTORS"]
+        self.sector_table = self.metadata.tables["INDUSTRIES"]
+        self.sector_table = self.metadata.tables["LOCATIONS"]
+        self.sector_table = self.metadata.tables["COMPANIES"]
+        self.sector_table = self.metadata.tables["STOCK_HISTORY"]
     
 
     def get_location_id(self, location):
@@ -54,24 +61,58 @@ class DatabaseUtilites:
             conn.execute(query, {'industry_name':industry.upper()})
             conn.commit()
 
+    def _upsert_sectors(self, companies, conn):
+        sector_map = [{'sector_name':name} for name in {company['sector'] for company in companies}]
 
-    # I need to add the locations to this
-    def insert_company(self, company):
-        sector_name = company.get('sector')
-        industry_name = company.get('industry')
-        sector_id = self.get_sector_id(sector_name)
-        if not sector_id:
-            self.insert_sector(sector_name)
-            sector_id = self.get_sector_id(sector_name)
+        insert_query = text('INSERT INTO SECTORS (name) VALUES (:sector_name) ON CONFLICT (name) DO NOTHING')
+        select_query = text('SELECT id_sector, name FROM SECTORS')
+
+        conn.execute(insert_query, sector_map)
+        result = conn.execute(select_query)
+
+        return {name:id_sector for id_sector, name in result.fetchall()}
+
+    def _upsert_industry(self, companies, conn):
+        industry_map = [{'industry_name':name} for name in {company['industry'] for company in companies}]
+
+        insert_query = text('INSERT INTO INDUSTRIES (name) VALUES (:industry_name) ON CONFLICT (name) DO NOTHING')
+        select_query = text('SELECT id_industry, name FROM INDUSTRIES')
+
+        conn.execute(insert_query, industry_map)
+        result = conn.execute(select_query)
+
+        return {name:id_industry for id_industry, name in result.fetchall()}
+
+    def _upsert_locations(self, companies, conn):
+        countries_map = [{'country_name':name} for name in {company['country'] for company in companies}]
+        locations = [{'country_name':country, 'city_name':city} for country, city in {(company['country'], company['city']) for company in companies}]
+
+        insert_country_query = text('INSERT INTO LOCATIONS (name, type) VALUES(:country_name, COUNTRY) ON CONFLICT (name) DO NOTHING')
+        insert_city_query = text('INSERT INTO LOCATIONS (name, type, id_parent_location) VALUES(:name, CITY, :id_parent) ON CONFLICT (name) DO NOTHING')
+        select_city_query = text("SELECT id_location, id_parent_location FROM LOCATIONS WHERE type = 'CITY'")
+        select_country = text("SELECT name, id_location FROM LOCATIONS WHERE type = 'COUNTRY'")
+
+        conn.execute(insert_country_query, countries_map)
+
+        countries_id = {name:id_location for name, id_location in conn.execute(select_country).fetchall()}
+        cities = [{'city_name':location['city_name'], 'id_parent':countries_id.get(location['country_name'])} for location in locations]
+        # cities = []
+        # for location in locations:
+        #     parent = countries_id.get(location.get('country'))
+        #     cities.append({'name':location.get('city_name'), 'id_parent':parent})
+
+        conn.execute(insert_city_query, cities)
+
+        result = conn.execute(select_city_query)
+        return {name:id_location for name, id_location in result.fetchall()}
         
-        industry_id = self.get_industry_id(industry_name)
-        if not industry_id:
-            self.insert_industry(industry_name)
-            industry_id = self.get_industry_id(industry_name)
 
-        query = text('INSERT INTO COMPANIES (name, symbol, industry, sector) VALUES (:name, :symbol, :industry_id, :sector_id)')
-        values = {'name':company.get('name'), 'symbol':company.get('symbol'), 'industry_id':industry_id, 'sector_id':sector_id}
-        with self.engine.connect() as conn:
-            conn.execute(query, values)
-            conn.commit()
 
+        
+
+
+
+        
+
+    def bulk_insert_companies(self, companies):
+         
