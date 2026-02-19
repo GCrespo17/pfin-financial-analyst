@@ -10,6 +10,17 @@ class DatabaseUtilites:
         self.db_username = os.getenv('DB_USERNAME')
         self.db_password = os.getenv('DB_PASSWORD')
         self.engine = create_engine('postgresql+psycopg://db_username:db_password@localhost/db_name')
+    
+
+    def get_location_id(self, location):
+        query = text('SELECT id_location FROM LOCATIONS WHERE name = :location_name')
+        with self.engine.connect() as conn:
+            result = conn.execute(query, {'location_name':location.upper()})
+            row = result.fetchone()
+            if row:
+                return row[0]
+            else:
+                return None
 
     def get_sector_id(self, sector):
         query = text("SELECT s.id_sector FROM SECTORS s WHERE s.name = :sector_name")
@@ -30,6 +41,13 @@ class DatabaseUtilites:
                 return row[0]
             else:
                 return None
+    
+    def insert_location(self, name, type):
+        query = text("INSERT INTO LOCATIONS (name, type) VALUES (:location_name, :location_type)")
+        with self.engine.connect() as conn:
+            conn.execute(query, {'location_name':name, 'locaiton_type':type})
+            conn.commit()
+
 
     def insert_sector(self, sector):
         query = text('INSERT INTO SECTORS (name) VALUES (:sector_name)')
@@ -43,6 +61,7 @@ class DatabaseUtilites:
             conn.execute(query, {'industry_name':industry.upper()})
             conn.commit()
 
+    # I need to add the locations to this
     def insert_company(self, company):
         sector_name = company.get('sector')
         industry_name = company.get('industry')
