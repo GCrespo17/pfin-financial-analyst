@@ -42,24 +42,18 @@ class DatabaseUtilites:
             else:
                 return None
     
-    def insert_location(self, name, type):
-        query = text("INSERT INTO LOCATIONS (name, type) VALUES (:location_name, :location_type)")
-        with self.engine.connect() as conn:
-            conn.execute(query, {'location_name':name, 'locaiton_type':type})
-            conn.commit()
-
-
     def insert_sector(self, sector):
-        query = text('INSERT INTO SECTORS (name) VALUES (:sector_name)')
+        query = text('INSERT INTO SECTORS (name) VALUES (:sector_name) ON CONFLICT (name) DO NOTHING')
         with self.engine.connect() as conn:
             conn.execute(query, {'sector_name':sector.upper()})
             conn.commit()
 
     def insert_industry(self, industry):
-        query = text('INSERT INTO INDUSTRIES (name) VALUES (:industry_name)')
+        query = text('INSERT INTO INDUSTRIES (name) VALUES (:industry_name) ON CONFLICT (name) DO NOTHING')
         with self.engine.connect() as conn:
             conn.execute(query, {'industry_name':industry.upper()})
             conn.commit()
+
 
     # I need to add the locations to this
     def insert_company(self, company):
@@ -80,7 +74,4 @@ class DatabaseUtilites:
         with self.engine.connect() as conn:
             conn.execute(query, values)
             conn.commit()
-
-
-
 
