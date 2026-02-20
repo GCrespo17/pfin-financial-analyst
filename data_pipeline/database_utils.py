@@ -42,15 +42,11 @@ class DatabaseUtilites:
             else:
                 return None
     
-    def _get_company_id(self, company_symbol):
-        query = text("SELECT id_company FROM COMPANIES WHERE symbol = :company_symbol")
+    def _get_company_symbol_id(self):
+        query = text("SELECT symbol, id_company FROM COMPANIES")
         with self.engine.connect() as conn:
-            result = conn.execute(query, company_symbol)
-            row = result.fetchone()
-            if row:
-                return row[0]
-            else:
-                return None
+            result = conn.execute(query)
+            return {name:id_company for name, id_company in result.fetchall()}
 
     def _upsert_sectors(self, companies, conn):
         sector_map = [{'sector_name':name} for name in {company['sector'] for company in companies}]
@@ -138,11 +134,16 @@ class DatabaseUtilites:
         inspector = inspect(self.engine)
         return inspector.has_table(table_name)
 
-    def bulk_insert_history(self, company_symbol, stock_history):
-         with self.engine.connect() as conn:
+    def bulk_insert_history(self, stock_history):
+        companies_id = self._get_company_symbol_id()
+
+        for item in stock_history:
+            company = item.pop('Symbol')
+            item['id_company'] = companies_id.get(company)
+            
+        with self.engine.connect() as conn:
             query = text("INSERT INTO STOCK_HISTORY(id_company, date, open, high, low, close, volume) VALUES(:id_company, :Date, :Open, :High, :Low, :Close, :Volume)")
-            company_id = self._get_company_id(company_symbol)
-            conn.execute(query)
+            conn.execute(query, stock_history)
 
 
 
