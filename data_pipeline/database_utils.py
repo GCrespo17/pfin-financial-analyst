@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, engine, text, MetaData, Table, insert
+from sqlalchemy import create_engine, engine, text, inspect
 import os
 from dotenv import load_dotenv
 
@@ -42,17 +42,15 @@ class DatabaseUtilites:
             else:
                 return None
     
-    def insert_sector(self, sector):
-        query = text('INSERT INTO SECTORS (name) VALUES (:sector_name) ON CONFLICT (name) DO NOTHING')
+    def _get_company_id(self, company_symbol):
+        query = text("SELECT id_company FROM COMPANIES WHERE symbol = :company_symbol")
         with self.engine.connect() as conn:
-            conn.execute(query, {'sector_name':sector.upper()})
-            conn.commit()
-
-    def insert_industry(self, industry):
-        query = text('INSERT INTO INDUSTRIES (name) VALUES (:industry_name) ON CONFLICT (name) DO NOTHING')
-        with self.engine.connect() as conn:
-            conn.execute(query, {'industry_name':industry.upper()})
-            conn.commit()
+            result = conn.execute(query, company_symbol)
+            row = result.fetchone()
+            if row:
+                return row[0]
+            else:
+                return None
 
     def _upsert_sectors(self, companies, conn):
         sector_map = [{'sector_name':name} for name in {company['sector'] for company in companies}]
@@ -127,5 +125,25 @@ class DatabaseUtilites:
             industries_map = self._upsert_industry(companies, conn)
             locations_map = self._upsert_locations(companies, conn)
             self._upsert_companies(companies, sectors_map, industries_map, locations_map, conn)
+    
+    def get_symbols(self):
+        with self.engine.connect() as conn:
+            query = text("SELECT symbol FROM COMPANIES")
+
+            result = conn.execute(query)
+
+            return [company[0] for company in result.fetchall()]
+
+    def table_exists(self, table_name):
+        inspector = inspect(self.engine)
+        return inspector.has_table(table_name)
+
+    def bulk_insert_history(self, company_symbol, stock_history):
+         with self.engine.connect() as conn:
+            query = text("INSERT INTO STOCK_HISTORY(id_company, date, open, high, low, close, volume) VALUES(:id_company, :Date, :Open, :High, :Low, :Close, :Volume)")
+            company_id = self._get_company_id(company_symbol)
+            conn.execute(query)
+
+
 
          
