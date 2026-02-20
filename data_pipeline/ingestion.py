@@ -46,6 +46,9 @@ def clean_stock_history_data(stock_history):
     history_dict = json.loads(stock_history.to_json(orient = 'records'))
     return history_dict
     
+def load_history_data(stock_history):
+    database = db.DatabaseUtilites()
+    database.bulk_insert_history(stock_history)
 
         
 
@@ -54,4 +57,6 @@ if __name__ == "__main__":
     # required_companies = get_companies_from_csv(file_name)
     # companies_data = fetch_companies_data(required_companies)
     # load_companies_data(clean_companies_data(companies_data))
-    print(clean_stock_history_data(fetch_stock_history(get_symbols_from_db())))
+    stock_history = clean_stock_history_data(fetch_stock_history(get_symbols_from_db()))
+    load_history_data(stock_history)
+
