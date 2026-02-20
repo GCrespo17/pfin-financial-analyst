@@ -1,7 +1,7 @@
 [project]
 name = "pfin-financial-analyst"
 version = "0.1.0"
-description = "Add your description here"
+description = "Financial Analyst"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -14,3 +14,6 @@ dependencies = [
     "sqlalchemy>=2.0.46",
     "yfinance>=1.1.0",
 ]
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
