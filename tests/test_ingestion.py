@@ -1,6 +1,5 @@
-from sqlalchemy.engine import mock
 from data_pipeline.ingestion import get_companies_from_csv, fetch_companies_data, clean_companies_data, load_companies_data
-import data_pipeline.database_utils
+import data_pipeline.database_utils as database_utils
 import pytest
 import yfinance as yf
 
@@ -46,7 +45,7 @@ def test_load_companies_data(monkeypatch):
     companies = [{'symbol':'MSFT', 'displayName':'Microsoft', 'sector':'Technology'}]
     mock_instance = MockDatabaseUtils()
 
-    monkeypatch.setattr(data_pipeline.database_utils, "DatabaseUtilites", lambda: mock_instance)
+    monkeypatch.setattr(database_utils, "DatabaseUtilites", lambda: mock_instance)
 
     load_companies_data(companies)
 
