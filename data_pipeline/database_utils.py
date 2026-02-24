@@ -37,7 +37,7 @@ class DatabaseRead:
         inspector = inspect(self.engine)
         return inspector.has_table(table_name)
 
-    def _get_company_symbol_id(self)->dict:
+    def get_company_symbol_id(self)->dict:
         query = text("SELECT symbol, id_company FROM COMPANIES")
         with self.engine.connect() as conn:
             result = conn.execute(query)
@@ -124,12 +124,7 @@ class DatabaseWrite:
             locations_map = self._insert_locations(locations, conn)
             self._upsert_companies(companies, sectors_map, industries_map, locations_map, conn)
 
-    def bulk_insert_history(self, stock_history:list[dict], companies_map:dict)->None:
-
-        for item in stock_history:
-            company = item.pop('Symbol')
-            item['id_company'] = companies_map.get(company)
-            
+    def bulk_insert_history(self, stock_history:list[dict])->None:
         with self.engine.connect() as conn:
             query = text("INSERT INTO STOCK_HISTORY(id_company, date, open, high, low, close, volume) VALUES(:id_company, :Date, :Open, :High, :Low, :Close, :Volume)")
             conn.execute(query, stock_history)
