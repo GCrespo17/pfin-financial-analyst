@@ -2,7 +2,7 @@ import yfinance as yf
 import csv
 import pandas as pd
 from pathlib import Path
-from data_pipeline.database_utils import DatabaseRead, DatabaseWrite
+from data_pipeline.database_utils import DatabaseRead, DatabaseWrite, DatabaseConfig
 
 def get_companies_from_csv(file_name: Path) -> list[str]:
     with open(file_name, newline='') as csvfile:
@@ -25,8 +25,14 @@ def clean_companies_data(companies_list:list[dict])->list[dict]:
         cleaned_companies.append(cleaned_company)
     return cleaned_companies
 
-def load_companies_data(companies_list: list[dict], database_writer:DatabaseWrite)->None:
-    database_writer.bulk_insert_companies(companies_list)
+def get_industries_set(companies_list:list[dict])->set[str]:
+    return {name for name in {company['industry'] for company in companies_list}}
+
+def get_sectors_set(companies_list:list[dict])->set[str]:
+    return {sector for sector in {company['industry'] for company in companies_list}}
+
+def load_companies_data(companies_list: list[dict], industries:set[str], sectors:set[str], database_writer:DatabaseWrite)->None:
+    database_writer.bulk_insert_companies(companies_list, industries, sectors)
 
 def get_symbols_from_db(database_reader:DatabaseRead)->list[str]:
     return database_reader.get_symbols()
@@ -50,8 +56,14 @@ def load_history_data(stock_history: list[dict], database_writer:DatabaseWrite, 
     database_writer.bulk_insert_history(stock_history, companies_map)
 
 def main()->None:
-    print("Hello")
+    database_config= DatabaseConfig()
+    database_writer = DatabaseWrite(database_config)
+    database_reader = DatabaseRead(database_config)
+    file_name = Path(__file__).with_name('companies.csv')
+    companies = clean_companies_data(fetch_companies_data(get_companies_from_csv(file_name)))
+    # load_companies_data(companies, database_writer)
+    print(get_industries_set(companies))
 
 
 if __name__ == "__main__":
-    file_name = Path(__file__).with_name('companies.csv')
+    main()

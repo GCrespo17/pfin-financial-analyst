@@ -50,25 +50,25 @@ class DatabaseWrite:
     def __init__(self, config:DatabaseConfig):
         self.engine = config.engine
 
-    def _insert_sectors(self, companies: list[dict], conn: Connection)->dict:
-        sector_map = [{'sector_name':name} for name in {company['sector'] for company in companies}]
+    def _insert_sectors(self, sectors: set[str], conn: Connection)->dict:
+        params = [{'sector_name':name} for name in sectors]
 
         insert_query = text('INSERT INTO SECTORS (name) VALUES (:sector_name) ON CONFLICT (name) DO NOTHING')
         select_query = text('SELECT id_sector, name FROM SECTORS')
 
-        conn.execute(insert_query, sector_map)
+        conn.execute(insert_query, params)
         conn.commit()
         result = conn.execute(select_query)
 
         return {name:id_sector for id_sector, name in result.fetchall()}
 
-    def _insert_industries(self, companies:list[dict], conn: Connection)->dict:
-        industry_map = [{'industry_name':name} for name in {company['industry'] for company in companies}]
+    def _insert_industries(self, industries:set[str], conn: Connection)->dict:
+        params = [{'industry_name':name} for name in industries]
 
         insert_query = text('INSERT INTO INDUSTRIES (name) VALUES (:industry_name) ON CONFLICT (name) DO NOTHING')
         select_query = text('SELECT id_industry, name FROM INDUSTRIES')
 
-        conn.execute(insert_query, industry_map)
+        conn.execute(insert_query, params)
         conn.commit()
         result = conn.execute(select_query)
 
@@ -112,10 +112,10 @@ class DatabaseWrite:
         conn.execute(query, companies_data)
         conn.commit()
 
-    def bulk_insert_companies(self, companies:list[dict]):
+    def bulk_insert_companies(self, companies:list[dict], industries:set, sectors:set):
         with self.engine.connect() as conn:
-            sectors_map = self._insert_sectors(companies, conn)
-            industries_map = self._insert_industries(companies, conn)
+            sectors_map = self._insert_sectors(sectors, conn)
+            industries_map = self._insert_industries(industries, conn)
             locations_map = self._insert_locations(companies, conn)
             self._upsert_companies(companies, sectors_map, industries_map, locations_map, conn)
 
