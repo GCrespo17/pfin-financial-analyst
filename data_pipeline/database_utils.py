@@ -1,54 +1,56 @@
-from sqlalchemy import create_engine, engine, text, inspect
+from sqlalchemy import create_engine, Connection, text, inspect
 import os
 from dotenv import load_dotenv
+from dataclasses import dataclass
 
 load_dotenv()
+# Dataclass to store my DB Config
+@dataclass
+class DatabaseConfig:
+    db_name = os.getenv('DB_NAME')        
+    db_username = os.getenv('DB_USERNAME')
+    db_password = os.getenv('DB_PASSWORD')
+    engine = create_engine(f'postgresql+psycopg://{db_username}:{db_password}@localhost/{db_name}')
 
-class DatabaseUtilites:
-    def __init__(self):
-        self.db_name = os.getenv('DB_NAME')
-        self.db_username = os.getenv('DB_USERNAME')
-        self.db_password = os.getenv('DB_PASSWORD')
-        self.engine = create_engine(f'postgresql+psycopg://{self.db_username}:{self.db_password}@localhost/{self.db_name}')
-    
+# Functions to read in the database
+class DatabaseRead:
+    def __init__(self, config:DatabaseConfig):
+        self.engine = config.engine
 
-    def get_location_id(self, location):
-        query = text('SELECT id_location FROM LOCATIONS WHERE name = :location_name')
+    def is_table_empty(self, table_name)->bool:
+        query = text("COUNT (*) FROM :table_name")
+
         with self.engine.connect() as conn:
-            result = conn.execute(query, {'location_name':location.upper()})
-            row = result.fetchone()
-            if row:
-                return row[0]
-            else:
-                return None
+            result = conn.execute(query, table_name)
+        is_empty = result.one()
+        if is_empty == 0:
+            return True
+        else:
+            return False
 
-    def get_sector_id(self, sector):
-        query = text("SELECT s.id_sector FROM SECTORS s WHERE s.name = :sector_name")
-        with self.engine.connect() as conn:
-            result = conn.execute(query, {'sector_name':sector.upper()})
-            row = result.fetchone()
-            if row:
-                return row[0]
-            else:
-                return None
+    def table_exists(self, table_name)->bool:
+        inspector = inspect(self.engine)
+        return inspector.has_table(table_name)
 
-    def get_industry_id(self, industry):
-        query = text("SELECT id_industry FROM INDUSTRIES WHERE name = :industry_name")
-        with self.engine.connect() as conn:
-            result = conn.execute(query, {'industry_name':industry.upper()})
-            row = result.fetchone()
-            if row:
-                return row[0]
-            else:
-                return None
-    
-    def _get_company_symbol_id(self):
+    def _get_company_symbol_id(self)->dict:
         query = text("SELECT symbol, id_company FROM COMPANIES")
         with self.engine.connect() as conn:
             result = conn.execute(query)
             return {name:id_company for name, id_company in result.fetchall()}
 
-    def _upsert_sectors(self, companies, conn):
+    def get_symbols(self)->list[str]:
+        with self.engine.connect() as conn:
+            query = text("SELECT symbol FROM COMPANIES")
+
+            result = conn.execute(query)
+
+            return [company[0] for company in result.fetchall()]
+
+class DatabaseWrite:
+    def __init__(self, config:DatabaseConfig):
+        self.engine = config.engine
+
+    def _insert_sectors(self, companies: list[dict], conn: Connection)->dict:
         sector_map = [{'sector_name':name} for name in {company['sector'] for company in companies}]
 
         insert_query = text('INSERT INTO SECTORS (name) VALUES (:sector_name) ON CONFLICT (name) DO NOTHING')
@@ -60,7 +62,7 @@ class DatabaseUtilites:
 
         return {name:id_sector for id_sector, name in result.fetchall()}
 
-    def _upsert_industry(self, companies, conn):
+    def _insert_industries(self, companies:list[dict], conn: Connection)->dict:
         industry_map = [{'industry_name':name} for name in {company['industry'] for company in companies}]
 
         insert_query = text('INSERT INTO INDUSTRIES (name) VALUES (:industry_name) ON CONFLICT (name) DO NOTHING')
@@ -72,7 +74,7 @@ class DatabaseUtilites:
 
         return {name:id_industry for id_industry, name in result.fetchall()}
 
-    def _upsert_locations(self, companies, conn):
+    def _insert_locations(self, companies:list[dict], conn:Connection)->dict:
         countries_map = [{'country_name':name} for name in {company['country'] for company in companies}]
         locations = [{'country_name':country, 'city_name':city} for country, city in {(company['country'], company['city']) for company in companies}]
 
@@ -86,17 +88,13 @@ class DatabaseUtilites:
 
         countries_id = {name:id_location for name, id_location in conn.execute(select_country).fetchall()}
         cities = [{'city_name':location['city_name'], 'id_parent':countries_id.get(location['country_name'])} for location in locations]
-        # cities = []
-        # for location in locations:
-        #     parent = countries_id.get(location.get('country'))
-        #     cities.append({'name':location.get('city_name'), 'id_parent':parent})
 
         conn.execute(insert_city_query, cities)
 
         result = conn.execute(select_city_query)
         return {name:id_location for name, id_location in result.fetchall()}
 
-    def _upsert_companies(self, companies, sectors_map, industries_map, locations_map,conn):
+    def _upsert_companies(self, companies: list[dict], sectors_map:dict, industries_map:dict, locations_map:dict, conn:Connection)->None:
         companies_data = [{'symbol':company.get('symbol'), 
                           'name':company.get('displayName'), 
                           'id_location':locations_map.get(company.get('city')),
@@ -114,37 +112,21 @@ class DatabaseUtilites:
         conn.execute(query, companies_data)
         conn.commit()
 
-
-    def bulk_insert_companies(self, companies):
+    def bulk_insert_companies(self, companies:list[dict]):
         with self.engine.connect() as conn:
-            sectors_map = self._upsert_sectors(companies, conn)
-            industries_map = self._upsert_industry(companies, conn)
-            locations_map = self._upsert_locations(companies, conn)
+            sectors_map = self._insert_sectors(companies, conn)
+            industries_map = self._insert_industries(companies, conn)
+            locations_map = self._insert_locations(companies, conn)
             self._upsert_companies(companies, sectors_map, industries_map, locations_map, conn)
-    
-    def get_symbols(self):
-        with self.engine.connect() as conn:
-            query = text("SELECT symbol FROM COMPANIES")
 
-            result = conn.execute(query)
-
-            return [company[0] for company in result.fetchall()]
-
-    def table_exists(self, table_name):
-        inspector = inspect(self.engine)
-        return inspector.has_table(table_name)
-
-    def bulk_insert_history(self, stock_history):
-        companies_id = self._get_company_symbol_id()
+    def bulk_insert_history(self, stock_history:list[dict], companies_map:dict)->None:
 
         for item in stock_history:
             company = item.pop('Symbol')
-            item['id_company'] = companies_id.get(company)
+            item['id_company'] = companies_map.get(company)
             
         with self.engine.connect() as conn:
             query = text("INSERT INTO STOCK_HISTORY(id_company, date, open, high, low, close, volume) VALUES(:id_company, :Date, :Open, :High, :Low, :Close, :Volume)")
             conn.execute(query, stock_history)
+            conn.commit()
 
-
-
-         
