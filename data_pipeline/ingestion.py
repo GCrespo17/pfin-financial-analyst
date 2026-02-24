@@ -2,7 +2,7 @@ import yfinance as yf
 import csv
 import pandas as pd
 from pathlib import Path
-from data_pipeline.database_utils import DatabaseRead, DatabaseWrite, DatabaseConfig
+from data_pipeline.database_utils import DatabaseRead, DatabaseWrite, DatabaseConfig, Location
 
 def get_companies_from_csv(file_name: Path) -> list[str]:
     with open(file_name, newline='') as csvfile:
@@ -31,8 +31,13 @@ def get_industries_set(companies_list:list[dict])->set[str]:
 def get_sectors_set(companies_list:list[dict])->set[str]:
     return {sector for sector in {company['industry'] for company in companies_list}}
 
-def load_companies_data(companies_list: list[dict], industries:set[str], sectors:set[str], database_writer:DatabaseWrite)->None:
-    database_writer.bulk_insert_companies(companies_list, industries, sectors)
+def get_locations_set(companies_list:list[dict])->set[Location]:
+    return {Location(country=company["country"], city=company["city"])
+            for company in companies_list
+            if company.get("country") and company.get("city")}
+
+def load_companies_data(companies_list: list[dict], industries:set[str], sectors:set[str], locations:set[Location], database_writer:DatabaseWrite)->None:
+    database_writer.bulk_insert_companies(companies_list, industries, sectors, locations)
 
 def get_symbols_from_db(database_reader:DatabaseRead)->list[str]:
     return database_reader.get_symbols()
