@@ -12,6 +12,11 @@ class DatabaseConfig:
     db_password = os.getenv('DB_PASSWORD')
     engine = create_engine(f'postgresql+psycopg://{db_username}:{db_password}@localhost/{db_name}')
 
+@dataclass(frozen=True)
+class Location:
+    country:str
+    city:str
+
 # Functions to read in the database
 class DatabaseRead:
     def __init__(self, config:DatabaseConfig):
@@ -74,20 +79,20 @@ class DatabaseWrite:
 
         return {name:id_industry for id_industry, name in result.fetchall()}
 
-    def _insert_locations(self, companies:list[dict], conn:Connection)->dict:
-        countries_map = [{'country_name':name} for name in {company['country'] for company in companies}]
-        locations = [{'country_name':country, 'city_name':city} for country, city in {(company['country'], company['city']) for company in companies}]
+    def _insert_locations(self, locations:set[Location], conn:Connection)->dict:
+        countries = {location.country for location in locations}
+        country_params = [{"country_name":country} for country in countries]
 
         insert_country_query = text("INSERT INTO LOCATIONS (name, type) VALUES(:country_name, 'COUNTRY') ON CONFLICT (name) DO NOTHING")
         insert_city_query = text("INSERT INTO LOCATIONS (name, type, id_parent_location) VALUES(:city_name, 'CITY', :id_parent) ON CONFLICT (name) DO NOTHING")
         select_city_query = text("SELECT name, id_location FROM LOCATIONS WHERE type = 'CITY'")
         select_country = text("SELECT name, id_location FROM LOCATIONS WHERE type = 'COUNTRY'")
 
-        conn.execute(insert_country_query, countries_map)
+        conn.execute(insert_country_query, country_params)
         conn.commit()
 
         countries_id = {name:id_location for name, id_location in conn.execute(select_country).fetchall()}
-        cities = [{'city_name':location['city_name'], 'id_parent':countries_id.get(location['country_name'])} for location in locations]
+        cities = [{'city_name':location.city, 'id_parent':countries_id.get(location.country)} for location in locations]
 
         conn.execute(insert_city_query, cities)
 
@@ -112,11 +117,11 @@ class DatabaseWrite:
         conn.execute(query, companies_data)
         conn.commit()
 
-    def bulk_insert_companies(self, companies:list[dict], industries:set, sectors:set):
+    def bulk_insert_companies(self, companies:list[dict], industries:set, sectors:set, locations:set[Location]):
         with self.engine.connect() as conn:
             sectors_map = self._insert_sectors(sectors, conn)
             industries_map = self._insert_industries(industries, conn)
-            locations_map = self._insert_locations(companies, conn)
+            locations_map = self._insert_locations(locations, conn)
             self._upsert_companies(companies, sectors_map, industries_map, locations_map, conn)
 
     def bulk_insert_history(self, stock_history:list[dict], companies_map:dict)->None:
