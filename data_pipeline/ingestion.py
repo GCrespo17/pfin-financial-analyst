@@ -26,10 +26,10 @@ def clean_companies_data(companies_list:list[dict])->list[dict]:
     return cleaned_companies
 
 def get_industries_set(companies_list:list[dict])->set[str]:
-    return {name for name in {company['industry'] for company in companies_list}}
+    return {name for name in {company["industry"] for company in companies_list}}
 
 def get_sectors_set(companies_list:list[dict])->set[str]:
-    return {sector for sector in {company['industry'] for company in companies_list}}
+    return {sector for sector in {company["sector"] for company in companies_list}}
 
 def get_locations_set(companies_list:list[dict])->set[Location]:
     return {Location(country=company["country"], city=company["city"])
@@ -38,6 +38,7 @@ def get_locations_set(companies_list:list[dict])->set[Location]:
 
 def load_companies_data(companies_list: list[dict], industries:set[str], sectors:set[str], locations:set[Location], database_writer:DatabaseWrite)->None:
     database_writer.bulk_insert_companies(companies_list, industries, sectors, locations)
+    print("Initial Database Poblation completed!")
 
 def get_symbols_from_db(database_reader:DatabaseRead)->list[str]:
     return database_reader.get_symbols()
@@ -56,7 +57,14 @@ def clean_stock_history_data(stock_history: pd.DataFrame)->list[dict]:
     normalized['Date'] = normalized['Date'].dt.strftime('%Y-%m-%d')
     normalized = normalized.rename(columns = {"Ticker":"Symbol"})
     return normalized.to_dict(orient="records")
-    
+
+def get_stock_history_by_id(stock_history:list[dict], database_reader:DatabaseRead)->list[dict]:
+    companies_map = database_reader.get_company_symbol_id()
+    for item in stock_history:
+        company = item.pop("Symbol")
+        item["id_company"] = companies_map.get(company)
+    return stock_history
+
 def load_history_data(stock_history: list[dict], database_writer:DatabaseWrite, companies_map: dict)->None:
     database_writer.bulk_insert_history(stock_history, companies_map)
 
@@ -66,8 +74,10 @@ def main()->None:
     database_reader = DatabaseRead(database_config)
     file_name = Path(__file__).with_name('companies.csv')
     companies = clean_companies_data(fetch_companies_data(get_companies_from_csv(file_name)))
-    # load_companies_data(companies, database_writer)
-    print(get_industries_set(companies))
+    industries = get_industries_set(companies)
+    sectors = get_sectors_set(companies)
+    locations = get_locations_set(companies)
+    load_companies_data(companies, industries, sectors, locations, database_writer)
 
 
 if __name__ == "__main__":
