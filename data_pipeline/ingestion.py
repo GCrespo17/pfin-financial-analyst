@@ -72,12 +72,13 @@ def main()->None:
     database_config= DatabaseConfig()
     database_writer = DatabaseWrite(database_config)
     database_reader = DatabaseRead(database_config)
-    file_name = Path(__file__).with_name('companies.csv')
-    companies = clean_companies_data(fetch_companies_data(get_companies_from_csv(file_name)))
-    industries = get_industries_set(companies)
-    sectors = get_sectors_set(companies)
-    locations = get_locations_set(companies)
-    load_companies_data(companies, industries, sectors, locations, database_writer)
+    # file_name = Path(__file__).with_name('companies.csv')
+    # companies = clean_companies_data(fetch_companies_data(get_companies_from_csv(file_name)))
+    # industries = get_industries_set(companies)
+    # sectors = get_sectors_set(companies)
+    # locations = get_locations_set(companies)
+    # load_companies_data(companies, industries, sectors, locations, database_writer)
+    print(database_reader.is_table_empty("COMPANIES"))
 
 
 if __name__ == "__main__":
