@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Connection, text, inspect
+from sqlalchemy import MetaData, Table, create_engine, Connection, text, inspect
 import os
 from dotenv import load_dotenv
 from dataclasses import dataclass
@@ -22,20 +22,18 @@ class DatabaseRead:
     def __init__(self, config:DatabaseConfig):
         self.engine = config.engine
 
-    def is_table_empty(self, table_name)->bool:
-        query = text("COUNT (*) FROM :table_name")
-
-        with self.engine.connect() as conn:
-            result = conn.execute(query, table_name)
-        is_empty = result.one()
-        if is_empty == 0:
-            return True
+    def is_table_empty(self, table_name:str)->bool:
+        if not self.table_exists(table_name.lower()):
+            raise ValueError(f"Table {table_name} does not exist...")
         else:
-            return False
+            query = text(f"SELECT NOT EXISTS (SELECT 1 FROM {table_name.lower()} LIMIT 1)")
+            with self.engine.connect() as conn:
+                return conn.execute(query).scalar_one()
+            
 
-    def table_exists(self, table_name)->bool:
+    def table_exists(self, table_name: str, schema:str = "public")->bool:
         inspector = inspect(self.engine)
-        return inspector.has_table(table_name)
+        return inspector.has_table(table_name, schema)
 
     def get_company_symbol_id(self)->dict:
         query = text("SELECT symbol, id_company FROM COMPANIES")
