@@ -66,7 +66,7 @@ def get_stock_history_by_id(stock_history:list[dict], database_reader:DatabaseRe
     return stock_history
 
 def load_history_data(stock_history: list[dict], database_writer:DatabaseWrite, companies_map: dict)->None:
-    database_writer.bulk_insert_history(stock_history, companies_map)
+    database_writer.bulk_insert_history(stock_history)
 
 def main()->None:
     database_config= DatabaseConfig()
@@ -78,7 +78,7 @@ def main()->None:
     # sectors = get_sectors_set(companies)
     # locations = get_locations_set(companies)
     # load_companies_data(companies, industries, sectors, locations, database_writer)
-    print(database_reader.is_table_empty("COMPANIES"))
+   
 
 
 if __name__ == "__main__":
