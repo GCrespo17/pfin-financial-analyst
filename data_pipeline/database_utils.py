@@ -1,16 +1,24 @@
 from sqlalchemy import MetaData, Table, create_engine, Connection, text, inspect
+from sqlalchemy.engine import Engine
 import os
 from dotenv import load_dotenv
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 load_dotenv()
 # Dataclass to store my DB Config
 @dataclass
 class DatabaseConfig:
-    db_name = os.getenv('DB_NAME')        
-    db_username = os.getenv('DB_USERNAME')
-    db_password = os.getenv('DB_PASSWORD')
-    engine = create_engine(f'postgresql+psycopg://{db_username}:{db_password}@localhost/{db_name}')
+    db_name:str = field(default_factory = lambda:os.getenv("DB_NAME", ""))
+    db_username:str = field(default_factory = lambda:os.getenv("DB_USERNAME", ""))
+    db_password:str = field(default_factory = lambda:os.getenv("DB_PASSWORD", ""))
+    db_host:str = field(default_factory = lambda:os.getenv("DB_HOST", "localhost"))
+    db_port:str = field(default_factory = lambda:os.getenv("DB_PORT", "5432"))
+    engine:Engine = field(init = False, repr = False)
+
+    def __post_init__(self)->None:
+        if not self.db_name or not self.db_username or not self.db_password:
+            raise ValueError("Environment variables missing (DB_NAME, DB_USERNAME, DB_PASSWORD)")
+        self.engine = create_engine(f'postgresql+psycopg://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}')
 
 @dataclass(frozen=True)
 class Location:
