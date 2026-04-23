@@ -1,6 +1,7 @@
 import pandas as pd
 import yfinance as yf
 
+import data_pipeline.ingestion as ingestion
 from data_pipeline.database_utils import Location
 from data_pipeline.ingestion import (
     clean_companies_data,
@@ -13,6 +14,7 @@ from data_pipeline.ingestion import (
     get_sectors_set,
     get_stock_history_by_id,
     get_symbols_from_db,
+    main,
     load_companies_data,
     load_history_data,
 )
@@ -80,6 +82,8 @@ def test_get_industries_set_returns_unique_values():
         {"industry": "Software"},
         {"industry": "Semiconductors"},
         {"industry": "Software"},
+        {},
+        {"industry": None},
     ]
 
     assert get_industries_set(companies) == {"Software", "Semiconductors"}
@@ -90,6 +94,8 @@ def test_get_sectors_set_returns_unique_values():
         {"sector": "Technology"},
         {"sector": "Consumer Discretionary"},
         {"sector": "Technology"},
+        {},
+        {"sector": None},
     ]
 
     assert get_sectors_set(companies) == {"Technology", "Consumer Discretionary"}
@@ -288,6 +294,122 @@ def test_load_history_data_calls_bulk_insert_history():
     stock_history = [{"Date": "2024-01-02", "id_company": 1, "Close": 105.0}]
     mock_writer = MockDatabaseWriter()
 
-    load_history_data(stock_history, mock_writer, {"MSFT": 1})
+    load_history_data(stock_history, mock_writer)
 
     assert mock_writer.called_with == stock_history
+
+
+def test_main_runs_full_etl_flow_with_default_period(monkeypatch):
+    valid_company = {
+        "symbol": "MSFT",
+        "displayName": "Microsoft",
+        "sector": "Technology",
+        "industry": "Software",
+        "city": "Redmond",
+        "country": "United States",
+    }
+    invalid_company = {
+        "symbol": "BAD",
+        "displayName": "Broken Co",
+        "sector": "Technology",
+        "industry": "Software",
+        "city": None,
+        "country": "United States",
+    }
+    history_frame = pd.DataFrame({"Close": [1.0]})
+    cleaned_history = [{"Date": "2024-01-02", "Symbol": "MSFT", "Close": 105.0}]
+    history_with_ids = [{"Date": "2024-01-02", "id_company": 1, "Close": 105.0}]
+    expected_locations = {Location(country="United States", city="Redmond")}
+
+    monkeypatch.delenv("FETCHING_PERIOD", raising=False)
+
+    class MockDatabaseConfig:
+        pass
+
+    class MockDatabaseWrite:
+        def __init__(self, config):
+            self.config = config
+
+    class MockDatabaseRead:
+        def __init__(self, config):
+            self.config = config
+
+    monkeypatch.setattr(ingestion, "DatabaseConfig", MockDatabaseConfig)
+    monkeypatch.setattr(ingestion, "DatabaseWrite", MockDatabaseWrite)
+    monkeypatch.setattr(ingestion, "DatabaseRead", MockDatabaseRead)
+
+    def mock_get_companies_from_csv(file_name):
+        assert file_name.name == "companies.csv"
+        return ["MSFT", "BAD"]
+
+    def mock_fetch_companies_data(company_symbol_list):
+        assert company_symbol_list == ["MSFT", "BAD"]
+        return [{"symbol": "raw"}]
+
+    def mock_clean_companies_data(companies_list):
+        assert companies_list == [{"symbol": "raw"}]
+        return [valid_company, invalid_company]
+
+    def mock_get_industries_set(companies_list):
+        assert companies_list == [valid_company]
+        return {"Software"}
+
+    def mock_get_sectors_set(companies_list):
+        assert companies_list == [valid_company]
+        return {"Technology"}
+
+    def mock_get_locations_set(companies_list):
+        assert companies_list == [valid_company]
+        return expected_locations
+
+    def mock_load_companies_data(
+        companies_list, industries, sectors, locations, database_writer
+    ):
+        assert companies_list == [valid_company]
+        assert industries == {"Software"}
+        assert sectors == {"Technology"}
+        assert locations == expected_locations
+        assert isinstance(database_writer, MockDatabaseWrite)
+
+    def mock_get_symbols_from_db(database_reader):
+        assert isinstance(database_reader, MockDatabaseRead)
+        return ["MSFT"]
+
+    def mock_fetch_stock_history(companies_symbol, fetching_period):
+        assert companies_symbol == ["MSFT"]
+        assert fetching_period == "1mo"
+        return history_frame
+
+    def mock_clean_stock_history_data(stock_history):
+        assert stock_history is history_frame
+        return cleaned_history
+
+    def mock_get_stock_history_by_id(stock_history, database_reader):
+        assert stock_history == cleaned_history
+        assert isinstance(database_reader, MockDatabaseRead)
+        return history_with_ids
+
+    def mock_load_history_data(stock_history, database_writer):
+        assert stock_history == history_with_ids
+        assert isinstance(database_writer, MockDatabaseWrite)
+
+    monkeypatch.setattr(
+        ingestion, "get_companies_from_csv", mock_get_companies_from_csv
+    )
+    monkeypatch.setattr(ingestion, "fetch_companies_data", mock_fetch_companies_data)
+    monkeypatch.setattr(ingestion, "clean_companies_data", mock_clean_companies_data)
+    monkeypatch.setattr(ingestion, "get_industries_set", mock_get_industries_set)
+    monkeypatch.setattr(ingestion, "get_sectors_set", mock_get_sectors_set)
+    monkeypatch.setattr(ingestion, "get_locations_set", mock_get_locations_set)
+    monkeypatch.setattr(ingestion, "load_companies_data", mock_load_companies_data)
+    monkeypatch.setattr(ingestion, "get_symbols_from_db", mock_get_symbols_from_db)
+    monkeypatch.setattr(ingestion, "fetch_stock_history", mock_fetch_stock_history)
+    monkeypatch.setattr(
+        ingestion, "clean_stock_history_data", mock_clean_stock_history_data
+    )
+    monkeypatch.setattr(
+        ingestion, "get_stock_history_by_id", mock_get_stock_history_by_id
+    )
+    monkeypatch.setattr(ingestion, "load_history_data", mock_load_history_data)
+
+    main()
