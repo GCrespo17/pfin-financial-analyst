@@ -8,12 +8,19 @@ load_dotenv()
 # Dataclass to store my DB Config
 @dataclass
 class DatabaseConfig:
+    """
+    Sets the basic configuration for the database, reading the Environment Variables,
+    if one of them does not exists it replace thems with a default value.
+    """
+    # Here im just using the lambda to meet default_factory requirements
+    # default_factory must have a function
     db_name:str = field(default_factory = lambda:os.getenv("DB_NAME", ""))
     db_username:str = field(default_factory = lambda:os.getenv("DB_USERNAME", ""))
     db_password:str = field(default_factory = lambda:os.getenv("DB_PASSWORD", ""))
     db_host:str = field(default_factory = lambda:os.getenv("DB_HOST", "localhost"))
     db_port:str = field(default_factory = lambda:os.getenv("DB_PORT", "5432"))
     engine:Engine = field(init = False, repr = False)
+    #init = False so engine does not show as a param repr = False so if i print config, it does not show engine
 
     def __post_init__(self)->None:
         if not self.db_name or not self.db_username or not self.db_password:
@@ -37,7 +44,6 @@ class DatabaseRead:
             query = text(f"SELECT NOT EXISTS (SELECT 1 FROM {table_name.lower()} LIMIT 1)")
             with self.engine.connect() as conn:
                 return conn.execute(query).scalar_one()
-            
 
     def table_exists(self, table_name: str, schema:str = "public")->bool:
         inspector = inspect(self.engine)
@@ -132,7 +138,9 @@ class DatabaseWrite:
 
     def bulk_insert_history(self, stock_history:list[dict])->None:
         with self.engine.connect() as conn:
-            query = text("INSERT INTO STOCK_HISTORY(id_company, date, open, high, low, close, volume) VALUES(:id_company, :Date, :Open, :High, :Low, :Close, :Volume)")
+            query = text("""INSERT INTO STOCK_HISTORY(id_company, date, open, high, low, close, volume) 
+                            VALUES(:id_company, :Date, :Open, :High, :Low, :Close, :Volume)
+                            ON CONFLICT DO NOTHING""")
             conn.execute(query, stock_history)
             conn.commit()
 
