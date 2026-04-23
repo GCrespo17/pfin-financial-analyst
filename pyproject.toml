@@ -1,0 +1,20 @@
+[project]
+name = "pfin-financial-analyst"
+version = "0.1.0"
+description = "Financial Analyst"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "dotenv>=0.9.9",
+    "fastapi>=0.129.0",
+    "numpy>=2.4.2",
+    "pandas>=3.0.0",
+    "psycopg[binary]>=3.3.2",
+    "pytest>=9.0.2",
+    "python-dotenv>=1.2.1",
+    "sqlalchemy>=2.0.46",
+    "yfinance>=1.1.0",
+]
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
