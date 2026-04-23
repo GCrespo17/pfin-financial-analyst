@@ -1,5 +1,6 @@
 import yfinance as yf
 import csv
+import os
 import pandas as pd
 from pathlib import Path
 from data_pipeline.database_utils import DatabaseRead, DatabaseWrite, DatabaseConfig, Location
@@ -26,10 +27,10 @@ def clean_companies_data(companies_list:list[dict])->list[dict]:
     return cleaned_companies
 
 def get_industries_set(companies_list:list[dict])->set[str]:
-    return {name for name in {company["industry"] for company in companies_list}}
+    return {name for name in {company["industry"] for company in companies_list if company.get("industry")}}
 
 def get_sectors_set(companies_list:list[dict])->set[str]:
-    return {sector for sector in {company["sector"] for company in companies_list}}
+    return {sector for sector in {company["sector"] for company in companies_list if company.get("sector")}}
 
 def get_locations_set(companies_list:list[dict])->set[Location]:
     return {Location(country=company["country"], city=company["city"])
@@ -38,7 +39,7 @@ def get_locations_set(companies_list:list[dict])->set[Location]:
 
 def load_companies_data(companies_list: list[dict], industries:set[str], sectors:set[str], locations:set[Location], database_writer:DatabaseWrite)->None:
     database_writer.bulk_insert_companies(companies_list, industries, sectors, locations)
-    print("Initial Database Poblation completed!")
+    print("Initial Database Population completed!")
 
 def get_symbols_from_db(database_reader:DatabaseRead)->list[str]:
     return database_reader.get_symbols()
@@ -65,19 +66,41 @@ def get_stock_history_by_id(stock_history:list[dict], database_reader:DatabaseRe
         item["id_company"] = companies_map.get(company)
     return stock_history
 
-def load_history_data(stock_history: list[dict], database_writer:DatabaseWrite, companies_map: dict)->None:
+def load_history_data(stock_history: list[dict], database_writer:DatabaseWrite)->None:
     database_writer.bulk_insert_history(stock_history)
 
 def main()->None:
-    database_config= DatabaseConfig()
+    file_name = Path(__file__).with_name("companies.csv")
+    fetching_period = os.getenv("FETCHING_PERIOD", "1mo")
+    database_config = DatabaseConfig()
     database_writer = DatabaseWrite(database_config)
     database_reader = DatabaseRead(database_config)
-    # file_name = Path(__file__).with_name('companies.csv')
-    # companies = clean_companies_data(fetch_companies_data(get_companies_from_csv(file_name)))
-    # industries = get_industries_set(companies)
-    # sectors = get_sectors_set(companies)
-    # locations = get_locations_set(companies)
-    # load_companies_data(companies, industries, sectors, locations, database_writer)
+    company_symbols = get_companies_from_csv(file_name)
+    companies = clean_companies_data(fetch_companies_data(company_symbols))
+    companies = [
+        company
+        for company in companies
+        if company.get("symbol")
+        and company.get("displayName")
+        and company.get("city")
+        and company.get("country")
+    ]
+    if not companies:
+        raise ValueError("No valid companies data available to load.")
+    industries = get_industries_set(companies)
+    sectors = get_sectors_set(companies)
+    locations = get_locations_set(companies)
+    load_companies_data(companies, industries, sectors, locations, database_writer)
+    stored_symbols = get_symbols_from_db(database_reader)
+    if not stored_symbols:
+        raise ValueError("No company symbols found in the database after loading companies.")
+    stock_history = fetch_stock_history(stored_symbols, fetching_period)
+    stock_history = clean_stock_history_data(stock_history)
+    stock_history = get_stock_history_by_id(stock_history, database_reader)
+    load_history_data(stock_history, database_writer)
+    print(
+        f"Stock history load completed for {len(stored_symbols)} companies using period '{fetching_period}'."
+    )
    
 
 
