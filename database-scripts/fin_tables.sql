@@ -39,7 +39,7 @@ CREATE TABLE STOCK_HISTORY(
   low NUMERIC(10, 4) NOT NULL,
   close NUMERIC(10, 4) NOT NULL,
   volume BIGINT NOT NULL,
-  CONSTRAINT fk_id_company FOREIGN KEY(id_company) REFERENCES COMPANIES(id_company)
+  CONSTRAINT fk_id_company FOREIGN KEY(id_company) REFERENCES COMPANIES(id_company),
   CONSTRAINT pk_stock_company PRIMARY KEY(id_company, date)
 );
 
